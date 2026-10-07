@@ -1,0 +1,114 @@
+/**
+ * Buyer Profile → Google Sheets
+ * 1) Pega este archivo en un proyecto de Google Apps Script.
+ * 2) Sustituye SPREADSHEET_ID por el ID de tu hoja.
+ * 3) Despliega el proyecto como aplicación web.
+ */
+const SPREADSHEET_ID = "PEGA_AQUI_EL_ID_DE_TU_GOOGLE_SHEET";
+const SHEET_NAME = "Buyer Profiles";
+
+const HEADERS = [
+  "Timestamp", "Código interno", "Mercado / provincia", "Estado del comprador", "Fecha objetivo",
+  "Precio máximo (€)", "Precio objetivo (€)", "Hipoteca aprobada aproximada (€)", "Aportación propia (€)", "Presupuesto reforma (€)",
+  "Ciudad / municipio principal", "Zonas prioritarias", "Zonas aceptables", "Zonas descartadas", "Acepta municipios cercanos", "Radio aceptable", "Tiempo máximo desplazamiento", "Transporte principal", "Punto cercano requerido",
+  "Tipo de inmueble", "Habitaciones mínimas", "Habitaciones ideales", "Baños mínimos", "Superficie mínima (m²)", "Superficie ideal (m²)",
+  "Prioridad: Ascensor", "Prioridad: Terraza", "Prioridad: Balcón", "Prioridad: Garaje", "Prioridad: Trastero", "Prioridad: Exterior", "Prioridad: Buena luz natural", "Prioridad: Aire acondicionado", "Prioridad: Calefacción", "Prioridad: Piscina", "Prioridad: Zonas comunes", "Prioridad: Accesibilidad", "Prioridad: Transporte público cercano",
+  "Plantas aceptadas", "Acepta vivienda sin ascensor", "Antigüedad del edificio", "Estados aceptados", "Nivel de reforma asumible",
+  "Descartes automáticos", "Otros descartes", "Descripción de vivienda ideal", "Descarte inmediato (texto)", "Información adicional",
+  "Priorización (orden)", "Consentimiento anonimización", "Consentimiento de uso", "Versión del esquema",
+  "searchRequested", "searchStatus", "searchRequestedAt"
+];
+
+const FIELD_TO_HEADER = {
+  clientCode: "Código interno", market: "Mercado / provincia", buyerStatus: "Estado del comprador", targetDate: "Fecha objetivo",
+  maxPrice: "Precio máximo (€)", targetPrice: "Precio objetivo (€)", mortgageAmount: "Hipoteca aprobada aproximada (€)", ownFunds: "Aportación propia (€)", renovationBudget: "Presupuesto reforma (€)",
+  mainCity: "Ciudad / municipio principal", priorityZones: "Zonas prioritarias", acceptableZones: "Zonas aceptables", excludedZones: "Zonas descartadas", nearbyMunicipalities: "Acepta municipios cercanos", radius: "Radio aceptable", commute: "Tiempo máximo desplazamiento", transport: "Transporte principal", nearbyPoint: "Punto cercano requerido",
+  propertyTypes: "Tipo de inmueble", minBedrooms: "Habitaciones mínimas", idealBedrooms: "Habitaciones ideales", minBathrooms: "Baños mínimos", minArea: "Superficie mínima (m²)", idealArea: "Superficie ideal (m²)",
+  acceptedFloors: "Plantas aceptadas", noElevator: "Acepta vivienda sin ascensor", buildingAge: "Antigüedad del edificio", acceptedStates: "Estados aceptados", renovationLevel: "Nivel de reforma asumible",
+  disqualifiers: "Descartes automáticos", otherDisqualifiers: "Otros descartes", idealHome: "Descripción de vivienda ideal", instantReject: "Descarte inmediato (texto)", additionalNotes: "Información adicional",
+  anonymizedConsent: "Consentimiento anonimización", purposeConsent: "Consentimiento de uso", schemaVersion: "Versión del esquema",
+  searchRequested: "searchRequested", searchStatus: "searchStatus", searchRequestedAt: "searchRequestedAt"
+};
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) throw new Error("No se recibieron datos.");
+    if (SPREADSHEET_ID === "PEGA_AQUI_EL_ID_DE_TU_GOOGLE_SHEET") throw new Error("Configura SPREADSHEET_ID en Code.gs.");
+    const data = JSON.parse(e.postData.contents);
+    if (!data.clientCode || !data.market || !data.buyerStatus || !data.mainCity || !data.maxPrice) {
+      throw new Error("Faltan campos obligatorios.");
+    }
+
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = getOrCreateSheet_(spreadsheet);
+    const row = HEADERS.map(header => {
+      if (header === "Timestamp") return new Date();
+      if (header === "Priorización (orden)") return formatFactors_(data.matchingFactors);
+      if (header.startsWith("Prioridad: ")) {
+        const featureName = header.slice("Prioridad: ".length);
+        return safeCell_(data.featurePriorities && data.featurePriorities[featureName]);
+      }
+      const key = Object.keys(FIELD_TO_HEADER).find(field => FIELD_TO_HEADER[field] === header);
+      if (!key) return "";
+      if (key === "searchRequested") return data[key] === true;
+      return formatValue_(data[key]);
+    });
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      sheet.appendRow(row);
+    } finally {
+      lock.releaseLock();
+    }
+    return jsonResponse_({ success: true, code: String(data.clientCode) });
+  } catch (error) {
+    return jsonResponse_({ success: false, error: error && error.message ? error.message : "Error al guardar el perfil." });
+  }
+}
+
+function doGet() {
+  return jsonResponse_({ success: true, message: "Buyer Profile endpoint activo." });
+}
+
+function getOrCreateSheet_(spreadsheet) {
+  let sheet = spreadsheet.getSheetByName(SHEET_NAME);
+  if (!sheet) sheet = spreadsheet.insertSheet(SHEET_NAME);
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight("bold").setBackground("#eaf1eb");
+  } else {
+    const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const missingHeaders = HEADERS.filter(header => !existingHeaders.includes(header));
+    if (missingHeaders.length) {
+      const startColumn = sheet.getLastColumn() + 1;
+      sheet.getRange(1, startColumn, 1, missingHeaders.length).setValues([missingHeaders]);
+      sheet.getRange(1, startColumn, 1, missingHeaders.length).setFontWeight("bold").setBackground("#eaf1eb");
+    }
+  }
+  return sheet;
+}
+
+function formatValue_(value) {
+  if (Array.isArray(value)) return value.map(safeCell_).filter(String).join(" | ");
+  if (value === true) return "Sí";
+  if (value === false) return "No";
+  return safeCell_(value);
+}
+
+function formatFactors_(factors) {
+  if (!Array.isArray(factors)) return "";
+  return factors.map(item => `${item.priority}. ${safeCell_(item.factor)}`).join(" | ");
+}
+
+function safeCell_(value) {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  // Evita que texto pegado desde el formulario se interprete como fórmula.
+  return /^[=+@]/.test(text) ? `'${text}` : text;
+}
+
+function jsonResponse_(value) {
+  return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
+}

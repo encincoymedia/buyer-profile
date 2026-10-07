@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-07",
+  "clientCode": "Prueba-002",
+  "row": 6,
+  "status": "needs_review",
+  "matches": [
+    {
+      "slot": 1,
+      "url": "https://www.idealista.com/inmueble/112710294/",
+      "note": "match1: Sant Cugat, 415000 €; Mínimos pendientes: m² construidos: 84 frente a mínimo 90; Deseable: Ascensor no disponible según anuncio; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar; Obligatorio: Exterior sin confirmar; Obligatorio: Buena luz natural sin confirmar"
+    },
+    {
+      "slot": 2,
+      "url": "https://www.idealista.com/inmueble/112121381/",
+      "note": "match2: Sant Cugat, 435000 €; Mínimos pendientes: baños: 1 frente a mínimo 2; Importante: Terraza sin confirmar; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar"
+    },
+    {
+      "slot": 3,
+      "url": "https://www.idealista.com/inmueble/111834752/",
+      "note": "match3: Sant Cugat, 495000 €; Mínimos pendientes: m² construidos: 86 frente a mínimo 90; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar; Obligatorio: Balcón sin confirmar"
+    },
+    {
+      "slot": 4,
+      "url": "https://www.idealista.com/inmueble/112559841/",
+      "note": "match4: Sant Cugat, 460000 €; Mínimos pendientes: m² construidos: 63 frente a mínimo 90; Deseable: Ascensor no disponible según anuncio; Importante: Terraza sin confirmar; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar"
+    },
+    {
+      "slot": 5,
+      "url": "https://www.idealista.com/inmueble/112438616/",
+      "note": "match5: Sant Cugat, 330000 €; Mínimos pendientes: baños: 1 frente a mínimo 2; m² construidos: 63 frente a mínimo 90; Importante: Terraza sin confirmar; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar"
+    },
+    {
+      "slot": 6,
+      "url": "https://www.idealista.com/inmueble/112600679/",
+      "note": "match6: Sant Cugat, 435000 €; Mínimos pendientes: baños: 1 frente a mínimo 2; m² construidos: 79 frente a mínimo 90; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar"
+    },
+    {
+      "slot": 7,
+      "url": "https://www.idealista.com/inmueble/112170313/",
+      "note": "match7: Sant Cugat, 398000 €; Mínimos pendientes: baños: 1 frente a mínimo 2; m² construidos: 88 frente a mínimo 90; Deseable: Ascensor no disponible según anuncio; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar"
+    },
+    {
+      "slot": 8,
+      "url": "https://www.idealista.com/inmueble/112395097/",
+      "note": "match8: Sant Cugat, 450000 €; Mínimos pendientes: baños: 1 frente a mínimo 2; m² construidos: 79 frente a mínimo 90; Importante: Terraza sin confirmar; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar; Obligatorio: Balcón sin confirmar"
+    },
+    {
+      "slot": 9,
+      "url": "https://www.idealista.com/inmueble/109402244/",
+      "note": "match9: Sant Cugat, 435000 €; Mínimos pendientes: habitaciones: 2 frente a mínimo 3; m² construidos: 76 frente a mínimo 90; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar; Obligatorio: Balcón sin confirmar; Obligatorio: Buena luz natural sin confirmar"
+    },
+    {
+      "slot": 10,
+      "url": "https://www.idealista.com/inmueble/82377636/",
+      "note": "match10: Sant Cugat, 470000 €; Mínimos pendientes: habitaciones: 2 frente a mínimo 3; baños: 1 frente a mínimo 2; Deseable: Garaje sin confirmar; Importante: Accesibilidad sin confirmar; Importante: Transporte público cercano sin confirmar; Obligatorio: Balcón sin confirmar; Obligatorio: Buena luz natural sin confirmar"
+    }
+  ],
+  "range": [
+    300000,
+    500000
+  ],
+  "creditsAdditional": 8,
+  "localChecks": 47,
+  "publicationVersion": 9,
+  "integrity": "Only row 6 searchStatus, match1–match10, searchedAt and status note changed. Other profile data and rows preserved.",
+  "validationScope": "One four-query Tavily run (8 credits) before the final HTML fixes; final verification reuses 23 discovered list URLs and reads 8 lists/60 property pages with zero additional Tavily queries. Every saved candidate has at least one observed minimum issue. No claim of complete compliance."
+}

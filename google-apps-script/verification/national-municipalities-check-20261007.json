@@ -1,0 +1,48 @@
+{
+  "checked": [
+    {
+      "input": "Torrejón",
+      "province": "Madrid",
+      "municipality": "Torrejón de Ardoz"
+    },
+    {
+      "input": "Alcalá",
+      "province": "Madrid",
+      "municipality": "Alcalá de Henares"
+    },
+    {
+      "input": "Chiclana",
+      "province": "Cádiz",
+      "municipality": "Chiclana de la Frontera"
+    },
+    {
+      "input": "Santiago",
+      "province": "A Coruña",
+      "municipality": "Santiago de Compostela"
+    },
+    {
+      "input": "Hospitalet",
+      "province": "Barcelona",
+      "municipality": "L'Hospitalet de Llobregat"
+    },
+    {
+      "input": "Sant Cugat",
+      "province": "Barcelona",
+      "municipality": "Sant Cugat del Vallès"
+    },
+    {
+      "input": "San Sebastián",
+      "province": "Gipuzkoa",
+      "municipality": "Donostia"
+    },
+    {
+      "input": "San Sebastián",
+      "province": "Madrid",
+      "municipality": "San Sebastián de los Reyes"
+    }
+  ],
+  "query": "Vivienda en venta en Torrejón de Ardoz (Madrid). entre 300000 y 500000 euros. Precio y características del inmueble",
+  "ambiguousStopped": true,
+  "tavilyCalls": 0,
+  "sheetWrites": 0
+}

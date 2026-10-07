@@ -1,0 +1,8 @@
+{
+  "source": "https://www.ine.es/daco/daco42/codmun/26codmun.xlsx",
+  "referenceDate": "2026-01-01",
+  "retrievedDate": "2026-10-07",
+  "municipalities": 8132,
+  "provinceEntries": 52,
+  "sourceSha256": "b4bea7c3cc1b295a73f7fa3ca68b2ef25c3a59833bd91ea5315ae25dcc1ca741"
+}

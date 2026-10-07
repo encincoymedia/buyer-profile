@@ -1,0 +1,7 @@
++									133 text [Buyer Link Check] {"id":"111045307","httpStatus":404,"precioLeido":null,"ocupadaDetectada":false}
++									137 text [Buyer Link Check] {"id":"106356204","httpStatus":200,"precioLeido":71000,"ocupadaDetectada":true}
++									141 text [Buyer Link Check] {"id":"112641161","httpStatus":200,"precioLeido":194999,"ocupadaDetectada":false}
++									145 text [Buyer Link Check] {"id":"109272862","httpStatus":200,"precioLeido":155000,"ocupadaDetectada":false}
++									149 text [Buyer Link Check] {"id":"110364422","httpStatus":404,"precioLeido":null,"ocupadaDetectada":false}
++								150 container Registro 7. 9:02:04 p.m.. Aviso. Se completó la ejecución.
++									153 text Se completó la ejecución

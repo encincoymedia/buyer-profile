@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="description" content="Registra perfiles anonimizados de búsqueda inmobiliaria para compradores con capacidad de compra definida.">
+  <title>Buyer Profile — Perfil de búsqueda inmobiliaria</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#buyer-form">Ir al formulario</a>
+  <header class="site-header">
+    <a class="brand" href="#inicio" aria-label="Buyer Profile, inicio">
+      <span>BUYER <b>PROFILE</b></span>
+    </a>
+    <span class="header-note">Perfil de búsqueda inmobiliaria</span>
+  </header>
+
+  <main id="inicio">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="intro-copy">
+        <p class="eyebrow">BUYER PROFILE <span aria-hidden="true">/</span> PILOTO</p>
+        <h1 id="page-title">Una búsqueda mejor empieza con un perfil claro.</h1>
+        <p class="lead">Define qué puede comprar tu cliente, qué está buscando y qué no está dispuesto a aceptar. Nosotros convertimos esa información en un perfil preparado para encontrar oportunidades compatibles.</p>
+        <a class="hero-action" href="#buyer-form">Crear Buyer Profile <span aria-hidden="true">↗</span></a>
+        <p class="hero-caption">Para brokers hipotecarios. Con capacidad de compra definida.</p>
+      </div>
+      <img class="hero-image" src="pareja.webp" alt="Pareja sonriendo y abrazándose" width="492" height="492" decoding="async">
+    </section>
+
+    <div class="form-shell">
+      <aside class="privacy-card" aria-labelledby="privacy-title">
+        <h2 id="privacy-title">PERFIL ANONIMIZADO</h2>
+        <p>No introduzcas nombres, DNI/NIE, teléfonos, correos electrónicos, direcciones personales ni documentación bancaria. Utiliza únicamente un código interno como <strong>VAL-001</strong>.</p>
+      </aside>
+      <aside class="form-aside" aria-label="Progreso del formulario">
+        <p class="aside-label">NUEVO BUYER PROFILE</p>
+        <p class="aside-title">Tres pasos. Un perfil claro.</p>
+        <nav class="section-nav" id="section-nav" aria-label="Pasos y secciones del formulario">
+          <div class="step-nav-group">
+            <a class="step-link active" href="#identificacion"><span class="nav-number">01</span><span class="nav-title">El comprador</span></a>
+            <div class="step-subnav">
+              <p class="step-nav-meta">Paso 1 de 3 · Contexto y presupuesto</p>
+              <a class="active" href="#identificacion">Identificación del perfil</a>
+              <a href="#economico">Marco económico</a>
+            </div>
+          </div>
+          <div class="step-nav-group">
+            <a class="step-link" href="#ubicacion"><span class="nav-number">02</span><span class="nav-title">Lo que busca</span></a>
+            <div class="step-subnav">
+              <p class="step-nav-meta">Paso 2 de 3 · Criterios de búsqueda</p>
+              <a href="#ubicacion">Ubicación</a>
+              <a href="#vivienda">Tipo de vivienda</a>
+              <a href="#caracteristicas">Características</a>
+              <a href="#edificio">Planta y edificio</a>
+              <a href="#estado-vivienda">Estado de la vivienda</a>
+            </div>
+          </div>
+          <div class="step-nav-group">
+            <a class="step-link" href="#descartes"><span class="nav-number">03</span><span class="nav-title">Prioridades</span></a>
+            <div class="step-subnav">
+              <p class="step-nav-meta">Paso 3 de 3 · Lo más importante</p>
+              <a href="#descartes">Viviendas que descartar</a>
+              <a href="#preferencias">Lo que busca realmente</a>
+              <a href="#priorizacion">Orden de prioridades</a>
+            </div>
+          </div>
+        </nav>
+        <div class="aside-foot">De la capacidad de compra<br>a una búsqueda bien definida.</div>
+      </aside>
+
+      <form id="buyer-form" novalidate>
+        <div class="form-topline"><span>PERFIL DE COMPRADOR</span><span><b aria-hidden="true">*</b> Campos obligatorios</span></div>
+        <div id="form-error" class="form-alert" role="alert" tabindex="-1" hidden></div>
+
+        <div class="form-step" aria-labelledby="step-buyer-title">
+          <div class="step-heading"><span class="step-count" aria-hidden="true">01</span><div><h2 id="step-buyer-title">El comprador</h2><p>Define el contexto básico y el límite real de compra.</p></div><span class="step-fraction">Paso 1 de 3</span></div>
+
+        <section class="form-section" id="identificacion" aria-labelledby="heading-identificacion">
+          <div class="section-heading"><span class="section-number">01</span><div><h3 id="heading-identificacion">Identificación del perfil</h3><p>Un código anónimo nos ayuda a mantener cada búsqueda organizada.</p></div></div>
+          <div class="field-grid two-col">
+            <div class="field"><label for="clientCode">Código interno del cliente <span class="required">*</span></label><input id="clientCode" name="clientCode" required maxlength="40" placeholder="VAL-001" autocomplete="off"><small>Usa un alias interno, nunca datos personales.</small><span class="field-error"></span></div>
+            <div class="field"><label for="market">Mercado principal / provincia <span class="required">*</span></label><select id="market" name="market" required><option value="">Seleccionar mercado</option><option>Barcelona</option><option>Valencia</option><option>Alicante</option><option>Otra</option></select><span class="field-error"></span></div>
+            <div class="field" id="otherMarketField" hidden><label for="otherMarket">Especifica la provincia <span class="required">*</span></label><input id="otherMarket" name="otherMarket" maxlength="80" placeholder="Provincia"><span class="field-error"></span></div>
+            <div class="field"><label for="buyerStatus">Estado del comprador <span class="required">*</span></label><select id="buyerStatus" name="buyerStatus" required><option value="">Seleccionar estado</option><option>Hipoteca aprobada</option><option>Financiación preaprobada</option><option>Capacidad de compra definida</option><option>Otro</option></select><span class="field-error"></span></div>
+            <div class="field"><label for="targetDate">Fecha objetivo aproximada</label><select id="targetDate" name="targetDate"><option value="">Seleccionar plazo</option><option>Inmediata</option><option>Menos de 3 meses</option><option>3–6 meses</option><option>6–12 meses</option><option>Sin fecha definida</option></select></div>
+          </div>
+        </section>
+
+        <section class="form-section" id="economico" aria-labelledby="heading-economico">
+          <div class="section-heading"><span class="section-number">02</span><div><h3 id="heading-economico">Marco económico</h3><p>Importes aproximados en euros. No incluyas información bancaria.</p></div></div>
+          <div class="field-grid two-col">
+            <div class="field"><label for="maxPrice">Precio máximo de compra <span class="required">*</span></label><div class="input-suffix"><input id="maxPrice" name="maxPrice" type="number" inputmode="numeric" min="1" step="1000" required placeholder="300.000"><span>€</span></div><span class="field-error"></span></div>
+            <div class="field"><label for="targetPrice">Precio objetivo / preferido</label><div class="input-suffix"><input id="targetPrice" name="targetPrice" type="number" inputmode="numeric" min="0" step="1000" placeholder="250.000"><span>€</span></div><span class="field-error"></span></div>
+            <div class="field"><label for="mortgageAmount">Importe aproximado de hipoteca aprobada</label><div class="input-suffix"><input id="mortgageAmount" name="mortgageAmount" type="number" inputmode="numeric" min="0" step="1000" placeholder="No aplica"><span>€</span></div><span class="field-error"></span></div>
+            <div class="field"><label for="ownFunds">Aportación propia disponible</label><div class="input-suffix"><input id="ownFunds" name="ownFunds" type="number" inputmode="numeric" min="0" step="1000" placeholder="Opcional"><span>€</span></div><span class="field-error"></span></div>
+            <div class="field"><label for="renovationBudget">Presupuesto adicional para reforma</label><div class="input-suffix"><input id="renovationBudget" name="renovationBudget" type="number" inputmode="numeric" min="0" step="500" placeholder="No aplica"><span>€</span></div><span class="field-error"></span></div>
+          </div>
+          <p class="inline-note"><span aria-hidden="true">i</span> Los campos económicos opcionales se pueden dejar vacíos.</p>
+        </section>
+
+        </div>
+        <div class="form-step" aria-labelledby="step-search-title">
+          <div class="step-heading"><span class="step-count" aria-hidden="true">02</span><div><h2 id="step-search-title">Lo que busca</h2><p>Describe qué tipo de vivienda podría encajar con el cliente.</p></div><span class="step-fraction">Paso 2 de 3</span></div>
+        <section class="form-section" id="ubicacion" aria-labelledby="heading-ubicacion">
+          <div class="section-heading"><span class="section-number">03</span><div><h3 id="heading-ubicacion">Ubicación</h3><p>Prioridades geográficas y desplazamientos habituales.</p></div></div>
+          <div class="field-grid two-col">
+            <div class="field"><label for="mainCity">Ciudad o municipio principal <span class="required">*</span></label><input id="mainCity" name="mainCity" required maxlength="100" placeholder="Ej. Valencia"><span class="field-error"></span></div>
+            <div class="field"><label for="priorityZones">Zonas prioritarias</label><textarea id="priorityZones" name="priorityZones" rows="3" maxlength="1200" placeholder="Barrios, municipios o zonas preferidas"></textarea><small>Barrios, municipios o zonas donde el cliente preferiría comprar.</small></div>
+            <div class="field"><label for="acceptableZones">Zonas aceptables</label><textarea id="acceptableZones" name="acceptableZones" rows="3" maxlength="1200" placeholder="Zonas que también podrían encajar"></textarea></div>
+            <div class="field"><label for="excludedZones">Zonas descartadas</label><textarea id="excludedZones" name="excludedZones" rows="3" maxlength="1200" placeholder="Zonas que no encajan"></textarea></div>
+            <div class="field"><label for="nearbyMunicipalities">¿Aceptaría municipios cercanos?</label><select id="nearbyMunicipalities" name="nearbyMunicipalities"><option value="">Seleccionar</option><option>Sí</option><option>No</option><option>Depende</option></select></div>
+            <div class="field"><label for="radius">Radio aproximado aceptable</label><select id="radius" name="radius"><option value="">Seleccionar</option><option>5 km</option><option>10 km</option><option>15 km</option><option>20 km</option><option>30 km</option><option>Más de 30 km</option><option>No aplica</option></select></div>
+            <div class="field"><label for="commute">Tiempo máximo de desplazamiento habitual</label><select id="commute" name="commute"><option value="">Seleccionar</option><option>15 min</option><option>30 min</option><option>45 min</option><option>60 min</option><option>No es relevante</option></select></div>
+            <fieldset class="field choice-field"><legend>Medio de transporte principal</legend><div class="choice-grid" id="transportChoices"></div></fieldset>
+            <div class="field full-width"><label for="nearbyPoint">¿Existe algún punto al que necesite estar especialmente cerca?</label><textarea id="nearbyPoint" name="nearbyPoint" rows="3" maxlength="1200" placeholder="Trabajo, colegio, familiares, transporte…"></textarea><small>No indiques direcciones exactas.</small></div>
+          </div>
+        </section>
+
+        <section class="form-section" id="vivienda" aria-labelledby="heading-vivienda">
+          <div class="section-heading"><span class="section-number">04</span><div><h3 id="heading-vivienda">Tipo de vivienda</h3><p>Define el formato y el espacio que necesita.</p></div></div>
+          <div class="field-grid two-col">
+            <fieldset class="field full-width choice-field"><legend>Tipo de inmueble</legend><div class="choice-grid" id="propertyTypes"></div></fieldset>
+            <div class="field"><label for="minBedrooms">Habitaciones mínimas</label><select id="minBedrooms" name="minBedrooms"><option value="">Sin preferencia</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6+</option></select></div>
+            <div class="field"><label for="idealBedrooms">Habitaciones ideales</label><select id="idealBedrooms" name="idealBedrooms"><option value="">Sin preferencia</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6+</option></select></div>
+            <div class="field"><label for="minBathrooms">Baños mínimos</label><select id="minBathrooms" name="minBathrooms"><option value="">Sin preferencia</option><option>1</option><option>2</option><option>3</option><option>4+</option></select></div>
+            <div class="field"><label for="minArea">Superficie mínima aproximada</label><div class="input-suffix"><input id="minArea" name="minArea" type="number" inputmode="numeric" min="0" step="5" placeholder="90"><span>m²</span></div><span class="field-error"></span></div>
+            <div class="field"><label for="idealArea">Superficie ideal</label><div class="input-suffix"><input id="idealArea" name="idealArea" type="number" inputmode="numeric" min="0" step="5" placeholder="110"><span>m²</span></div><span class="field-error"></span></div>
+          </div>
+        </section>
+
+        <section class="form-section" id="caracteristicas" aria-labelledby="heading-caracteristicas">
+          <div class="section-heading"><span class="section-number">05</span><div><h3 id="heading-caracteristicas">Características</h3><p>Indica cuánto pesa cada elemento en la decisión.</p></div></div>
+          <div class="priority-list" id="featurePriorities"></div>
+          <div class="priority-legend"><span><i class="legend-mark must"></i> Imprescindible</span><span><i class="legend-mark nice"></i> Preferencia</span></div>
+        </section>
+
+        <section class="form-section" id="edificio" aria-labelledby="heading-edificio">
+          <div class="section-heading"><span class="section-number">06</span><div><h3 id="heading-edificio">Planta y edificio</h3><p>Condiciones del inmueble y del bloque.</p></div></div>
+          <div class="field-grid two-col">
+            <fieldset class="field choice-field full-width"><legend>Plantas aceptadas</legend><div class="choice-grid" id="floorChoices"></div></fieldset>
+            <div class="field"><label for="noElevator">¿Acepta vivienda sin ascensor?</label><select id="noElevator" name="noElevator"><option value="">Seleccionar</option><option>Sí</option><option>No</option><option>Depende de la planta</option></select></div>
+            <div class="field"><label for="buildingAge">Antigüedad del edificio</label><select id="buildingAge" name="buildingAge"><option value="">Seleccionar</option><option>Indiferente</option><option>Preferiblemente obra nueva</option><option>Preferiblemente reciente</option><option>Acepta edificios antiguos</option></select></div>
+          </div>
+        </section>
+
+        <section class="form-section" id="estado-vivienda" aria-labelledby="heading-estado-vivienda">
+          <div class="section-heading"><span class="section-number">07</span><div><h3 id="heading-estado-vivienda">Estado de la vivienda</h3><p>Señala los estados que el comprador consideraría.</p></div></div>
+          <div class="field-grid two-col">
+            <fieldset class="field choice-field full-width"><legend>Estado aceptado</legend><div class="choice-grid" id="acceptedStates"></div></fieldset>
+            <div class="field"><label for="renovationLevel">¿Cuánto nivel de reforma está dispuesto a asumir?</label><select id="renovationLevel" name="renovationLevel"><option value="">Seleccionar</option><option>Ninguna</option><option>Pequeños trabajos</option><option>Reforma ligera</option><option>Reforma parcial</option><option>Reforma integral</option></select></div>
+          </div>
+        </section>
+
+        </div>
+        <div class="form-step" aria-labelledby="step-priorities-title">
+          <div class="step-heading"><span class="step-count" aria-hidden="true">03</span><div><h2 id="step-priorities-title">Lo que realmente importa</h2><p>Define qué factores pesan realmente en la decisión.</p></div><span class="step-fraction">Paso 3 de 3</span></div>
+        <section class="form-section" id="descartes" aria-labelledby="heading-descartes">
+          <div class="section-heading"><span class="section-number">08</span><div><h3 id="heading-descartes">¿Qué viviendas no vale la pena mostrarle?</h3><p>Marca las condiciones que descartan una vivienda desde el principio.</p></div></div>
+          <fieldset class="field choice-field"><legend>¿Qué situaciones deben descartar automáticamente una vivienda?</legend><div class="choice-grid" id="disqualifiers"></div></fieldset>
+          <div class="field top-gap"><label for="otherDisqualifiers">Otros motivos de descarte</label><textarea id="otherDisqualifiers" name="otherDisqualifiers" rows="3" maxlength="1200" placeholder="Añade cualquier otro motivo"></textarea></div>
+        </section>
+
+        <section class="form-section" id="preferencias" aria-labelledby="heading-preferencias">
+          <div class="section-heading"><span class="section-number">09</span><div><h3 id="heading-preferencias">¿Qué está buscando realmente?</h3><p>Añade lo que sabes del cliente y que no cabe en una casilla.</p></div></div>
+          <div class="field-stack">
+            <div class="field"><label for="idealHome">Describe con tus palabras la vivienda ideal para este cliente</label><textarea id="idealHome" name="idealHome" rows="5" maxlength="3000" placeholder="¿Qué está buscando realmente? ¿Cómo sería un hogar perfecto para este comprador?"></textarea><small>No hace falta utilizar lenguaje técnico.</small></div>
+            <div class="field"><label for="instantReject">¿Qué cosas harían que descartaras inmediatamente una vivienda para este cliente?</label><textarea id="instantReject" name="instantReject" rows="4" maxlength="2500" placeholder="Aspectos que serían un no definitivo"></textarea></div>
+            <div class="field"><label for="additionalNotes">¿Hay algo importante sobre esta búsqueda que no hayamos preguntado?</label><textarea id="additionalNotes" name="additionalNotes" rows="3" maxlength="2000" placeholder="Información adicional relevante"></textarea></div>
+          </div>
+        </section>
+
+        <section class="form-section" id="priorizacion" aria-labelledby="heading-priorizacion">
+          <div class="section-heading"><span class="section-number">10</span><div><h3 id="heading-priorizacion">¿Qué pesa más en la decisión?</h3><p>Elige hasta cinco factores y ordénalos por importancia.</p></div></div>
+          <fieldset class="field choice-field"><legend>¿Qué aspectos son más importantes? <span class="field-hint">Selecciona máximo 5</span></legend><div class="choice-grid priority-options" id="matchingFactors"></div><span class="field-error" id="factor-error"></span></fieldset>
+          <div class="selected-priorities" id="selected-priorities" aria-live="polite"></div>
+        </section>
+
+        </div>
+        <section class="consent-section" aria-labelledby="consent-title">
+          <h2 id="consent-title">Confirmación del broker</h2>
+          <label class="consent-check"><input type="checkbox" name="anonymizedConsent" required><span>Confirmo que este perfil está anonimizado y que no he incluido información que permita identificar directamente al comprador. <b>*</b></span></label>
+          <label class="consent-check"><input type="checkbox" name="purposeConsent" required><span>Confirmo que los datos introducidos se utilizan exclusivamente para probar y mejorar el sistema de búsqueda y matching inmobiliario. <b>*</b></span></label>
+          <span class="field-error consent-error"></span>
+        </section>
+
+        <div class="submit-area">
+          <p>Un último paso para dejar preparado el perfil de tu comprador.</p>
+          <button class="submit-button" id="submit-button" type="submit"><span>GUARDAR Y BUSCAR PROPIEDADES</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+      </form>
+    </div>
+    <section class="success-panel" id="success-panel" tabindex="-1" aria-labelledby="success-title" hidden>
+      <div class="success-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <p class="eyebrow">BUYER PROFILE ENVIADO</p><h2 id="success-title">Perfil enviado y búsqueda solicitada.</h2><p class="success-reference">Código <strong id="success-code"></strong></p>
+      <p>Ya puedes registrar otro comprador.</p>
+      <button class="secondary-button" id="new-profile" type="button">Crear otro perfil <span aria-hidden="true">↗</span></button>
+    </section>
+  </main>
+  <footer class="site-footer"><span>BUYER PROFILE</span><span>Herramienta piloto para brokers hipotecarios</span></footer>
+</body>
+</html>

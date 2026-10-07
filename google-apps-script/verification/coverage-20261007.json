@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-07",
+  "tavilyCredits": 8,
+  "report": {
+    "estado": "needs_review",
+    "resultados": 10,
+    "propiedades": [
+      {
+        "url": "https://www.pisos.com/comprar/piso-silla_centro_urbano-65880924326_527888/",
+        "precio": 210000,
+        "zona": "Silla"
+      },
+      {
+        "url": "https://www.idealista.com/inmueble/111852543/",
+        "precio": 270000,
+        "zona": "Silla"
+      },
+      {
+        "url": "https://www.pisos.com/comprar/piso-silla_centro_urbano-62518263804_100500/",
+        "precio": 250000,
+        "zona": "Silla"
+      },
+      {
+        "url": "https://www.idealista.com/inmueble/112157409/",
+        "precio": 270000,
+        "zona": "Silla"
+      },
+      {
+        "url": "https://www.fotocasa.es/es/comprar/vivienda/picassent/terraza-ascensor/190867503/d",
+        "precio": 250000,
+        "zona": "Picassent"
+      },
+      {
+        "url": "https://www.fotocasa.es/es/comprar/vivienda/albal/parking-ascensor/190974441/d",
+        "precio": 209000,
+        "zona": "Albal"
+      },
+      {
+        "url": "https://www.idealista.com/inmueble/110555376/",
+        "precio": 265000,
+        "zona": "Picassent"
+      },
+      {
+        "url": "https://www.fotocasa.es/es/comprar/vivienda/picassent/aire-acondicionado-ascensor-amueblado/190740983/d",
+        "precio": 200000,
+        "zona": "Picassent"
+      },
+      {
+        "url": "https://www.idealista.com/inmueble/112749427/",
+        "precio": 220000,
+        "zona": "Picassent"
+      },
+      {
+        "url": "https://www.idealista.com/inmueble/111785988/",
+        "precio": 225000,
+        "zona": "Picassent"
+      }
+    ],
+    "resumen": "Preselección por reglas; no confirma disponibilidad ni interpreta por completo los textos libres.\nRango de precio: 200000–280000 € (hipoteca + fondos propios). Prioridad: zonas preferidas, después zonas aceptables.\nCandidatos propuestos: 10. Revisar posibles duplicados cuando los anuncios no aporten datos suficientes.\nPreferencias: primero todas las comprobadas; después flexibilizar Deseable y finalmente Importante, dentro de cada grupo de zonas. Zona y presupuesto son filtros fuertes; habitaciones, baños, superficie y características No lo quiere pueden quedar pendientes cuando la zona prioritaria coincide. Solo se guardan anuncios con precio leído dentro del rango.\nmatch1: Importante: Accesibilidad sin confirmar\nmatch2: Importante: Accesibilidad sin confirmar\nmatch3: Importante: Balcón sin confirmar; Importante: Accesibilidad sin confirmar\nmatch4: Deseable: Ascensor no disponible según anuncio; Importante: Balcón sin confirmar; Importante: Accesibilidad sin confirmar\nmatch5: Importante: Accesibilidad sin confirmar\nmatch6: Importante: Balcón sin confirmar; Importante: Accesibilidad sin confirmar\nmatch7: Importante: Balcón sin confirmar; Importante: Accesibilidad sin confirmar\nmatch8: Importante: Accesibilidad sin confirmar\nmatch9: Importante: Accesibilidad sin confirmar\nmatch10: Importante: Accesibilidad sin confirmar\nCobertura: Ampliación de la misma prueba con listados ya observados; cero consultas y créditos Tavily adicionales; Listados HTML: 3 páginas leídas sin consultas Tavily adicionales; Listados: 60 fichas enlazadas examinadas, 60 recuperadas; límite 60, sin consultas Tavily adicionales\nDescartes: {\"URL no reconocida\":4,\"supera el presupuesto\":10,\"zona no acreditada en título o URL\":24,\"tipo de vivienda no seleccionado\":4,\"por debajo del rango mínimo\":10,\"precio no comprobado\":2}\nRevisar las propiedades enlazadas antes de presentarlas al comprador; puede haber requisitos sin confirmar."
+  }
+}

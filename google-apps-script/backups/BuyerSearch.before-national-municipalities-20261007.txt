@@ -1,0 +1,725 @@
+/**
+ * Preselección conservadora con Tavily. No necesita otra API ni dependencias.
+ * Cuatro búsquedas advanced por perfil (hasta 8 créditos), sin reintentos.
+ * Los resultados requieren revisión: ningún anuncio acredita disponibilidad.
+ */
+function runPrueba001() {
+  return BuyerSearch.runByCode("PRUEBA-001");
+}
+
+function runBuyerSearch_(identity) {
+  return BuyerSearch.run(identity);
+}
+
+const BuyerSearch = (() => {
+  const MATCH_FIELDS = Array.from({ length: 10 }, (_, i) => "match" + (i + 1));
+  const portals = [
+    { name: "idealista.com", path: "idealista.com/inmueble", re: /^https:\/\/(?:www\.)?idealista\.com\/inmueble\/(\d+)\/?$/i },
+    { name: "fotocasa.es", path: "fotocasa.es/es/comprar/vivienda", re: /^https:\/\/(?:www\.)?fotocasa\.es\/es\/comprar\/vivienda\/[^/]+\/[^/]+\/(\d+)\/d\/?$/i },
+    { name: "pisos.com", path: "pisos.com/comprar", re: /^https:\/\/(?:www\.)?pisos\.com\/comprar\/[^/]+-(\d+_\d+)\/?$/i },
+    { name: "milanuncios.com", path: "milanuncios.com", re: /^https:\/\/(?:www\.)?milanuncios\.com\/venta-de-(?:pisos|casas|chalets|apartamentos)[^/]*\/[^/]+-(\d+)\.htm$/i }
+  ];
+  const fold = value => String(value == null ? "" : value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const list = value => String(value || "").split(/[|,;\n]+/).map(s => s.trim()).filter(Boolean);
+  const unique = values => [...new Set(values)];
+  const number = value => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    let s = String(value || "").replace(/[€\s+]/g, "");
+    if (!/^\d+(?:[.,]\d+)*$/.test(s)) return null;
+    if (/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
+    else if (/^\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?$/.test(s)) s = s.replace(/,/g, "");
+    else s = s.replace(",", ".");
+    return Number.isFinite(Number(s)) ? Number(s) : null;
+  };
+  const meaningful = value => value && !/^(no|ningun[oa]?(?: otro)?|indiferente|no aplica|sin preferencia)$/i.test(fold(value));
+  const escape = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const contains = (text, term) => new RegExp("(?:^|[^a-z0-9])" + escape(fold(term)) + "(?:$|[^a-z0-9])").test(fold(text));
+  const stamp = value => value instanceof Date ? value.toISOString() : String(value || "");
+  const identityOf = p => ({ clientCode: String(p.clientCode), timestamp: stamp(p.timestamp) });
+
+  // Equivalencias de municipios, no coincidencias por prefijo: Sant Cugat
+  // Sesgarrigues sigue siendo una localidad distinta de Sant Cugat del Vallès.
+  function placeNames(place, market) {
+    const names = [String(place).trim()];
+    if (fold(market) === "barcelona") {
+      const municipalities = [
+        ["Sant Cugat", "Sant Cugat del Vallès"],
+        ["Cerdanyola", "Cerdanyola del Vallès"]
+      ];
+      const group = municipalities.find(group => group.some(name => fold(name) === fold(place)));
+      if (group) names.push(...group);
+    }
+    return unique(names);
+  }
+
+  function table() {
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 1) throw new Error("No existe la pestaña Buyer Profiles con encabezados.");
+    const values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+    const headers = values[0].map(String);
+    const required = ["timestamp", "clientCode", "mainCity", "market", "mortgageAmount", "ownFunds", "searchRequested", "searchStatus", "searchedAt"].concat(MATCH_FIELDS);
+    if (required.some(h => headers.indexOf(h) < 0) || unique(headers.filter(Boolean)).length !== headers.filter(Boolean).length) {
+      throw new Error("Los encabezados no coinciden con Buyer Profiles; no se han modificado.");
+    }
+    return { sheet, headers, rows: values.slice(1).map((r, i) => ({
+      row: i + 2, profile: Object.fromEntries(headers.map((h, j) => [h, r[j]]))
+    })) };
+  }
+
+  function find(t, identity) {
+    const rows = t.rows.filter(r => String(r.profile.clientCode) === identity.clientCode && stamp(r.profile.timestamp) === identity.timestamp);
+    if (rows.length !== 1) throw new Error("No se puede identificar una única fila; búsqueda detenida.");
+    return rows[0];
+  }
+
+  function fingerprint(p) {
+    return JSON.stringify(Object.keys(p).filter(k => !MATCH_FIELDS.includes(k) && !["searchStatus", "searchedAt"].includes(k)).sort().map(k => [k, p[k]]));
+  }
+
+  function cell(t, row, field) { return t.sheet.getRange(row, t.headers.indexOf(field) + 1); }
+  function setStatus(t, row, status, note) {
+    cell(t, row, "searchStatus").setValue(status).setNote(note.slice(0, 30000));
+    SpreadsheetApp.flush();
+  }
+
+  function runByCode(code) {
+    const t = table();
+    const rows = t.rows.filter(r => String(r.profile.clientCode) === code);
+    if (rows.length !== 1) throw new Error("Debe existir una sola fila con código " + code + ".");
+    return run(identityOf(rows[0].profile));
+  }
+
+  function run(identity) {
+    const lock = LockService.getScriptLock();
+    let profile;
+    lock.waitLock(10000);
+    try {
+      const t = table(), entry = find(t, identity);
+      profile = entry.profile;
+      if (profile.searchStatus !== "pending") {
+        console.info("[Buyer Search] Omitido: la fila ya no está pending.");
+        return { status: profile.searchStatus, skipped: true };
+      }
+      if (!(profile.searchRequested === true || ["si", "true", "verdadero"].includes(fold(profile.searchRequested)))) {
+        throw new Error("La fila no tiene una solicitud de búsqueda.");
+      }
+      if (MATCH_FIELDS.some(field => profile[field])) throw new Error("La fila ya contiene resultados; no se sobrescriben.");
+      setStatus(t, entry.row, "searching", "Búsqueda en curso. Si una ejecución se interrumpe, revisar Ejecuciones antes de reintentar.");
+    } finally { lock.releaseLock(); }
+
+    console.info("[Buyer Search] Perfil leído; búsqueda iniciada.");
+    let report;
+    try {
+      const criteria = makeCriteria(profile);
+      const data = retrieve(criteria);
+      report = rank(criteria, data);
+    } catch (error) {
+      report = { status: "error", matches: [], summary: "No se completó la búsqueda. " + error.message };
+    }
+
+    lock.waitLock(10000);
+    try {
+      // Localiza de nuevo la fila: puede haberse ordenado la hoja mientras se buscaba.
+      const t = table(), entry = find(t, identity);
+      if (entry.profile.searchStatus !== "searching") throw new Error("La fila cambió de estado durante la búsqueda; no se sobrescribe.");
+      if (fingerprint(entry.profile) !== fingerprint(profile)) {
+        setStatus(t, entry.row, "error", "El perfil cambió durante la búsqueda. No se han escrito los resultados.");
+        return { status: "error", changed: true };
+      }
+      if (MATCH_FIELDS.some(field => entry.profile[field])) {
+        setStatus(t, entry.row, "error", "Se añadieron resultados durante la búsqueda; no se sobrescriben.");
+        return { status: "error", changed: true };
+      }
+      for (let i = 0; i < report.matches.length; i++) {
+        const match = report.matches[i];
+        // Cada resultado contiene únicamente la URL clicable de la propiedad.
+        cell(t, entry.row, "match" + (i + 1)).setRichTextValue(
+          SpreadsheetApp.newRichTextValue().setText(match.url).setLinkUrl(match.url).build()
+        );
+      }
+      cell(t, entry.row, "searchedAt").setValue(new Date());
+      setStatus(t, entry.row, report.status, report.summary);
+    } finally { lock.releaseLock(); }
+    console.info("[Buyer Search] " + JSON.stringify({ estado: report.status, resultados: report.matches.length, resumen: report.summary }));
+    return { status: report.status, matches: report.matches.length };
+  }
+
+  function makeCriteria(p) {
+    // Regla elegida por el usuario: hipoteca + aportación propia.
+    // Los campos opcionales vacíos aportan cero; no se recurre a maxPrice.
+    const contribution = value => value == null || String(value).trim() === "" ? 0 : number(value);
+    const mortgage = contribution(p.mortgageAmount), ownFunds = contribution(p.ownFunds);
+    if (mortgage === null || ownFunds === null || mortgage < 0 || ownFunds < 0) {
+      throw new Error("Revisa los importes de hipoteca y aportación propia: deben ser números no negativos.");
+    }
+    const maxPrice = mortgage + ownFunds;
+    const targetPrice = number(p.targetPrice);
+    const minPrice = targetPrice !== null && targetPrice > 0 ? Math.max(0, targetPrice - 50000) : null;
+    if (!Number.isFinite(maxPrice) || maxPrice <= 0) {
+      throw new Error("Indica hipoteca o aportación propia: su suma debe ser mayor que cero.");
+    }
+    if (!p.mainCity || !p.market || !maxPrice || maxPrice <= 0) throw new Error("Faltan municipio, provincia o presupuesto válido.");
+    const places = unique([String(p.mainCity).trim()].concat(list(p.priorityZones), list(p.acceptableZones))).filter(meaningful);
+    if (places.length > 8) throw new Error("Hay más de ocho zonas: concreta la búsqueda antes de consumir créditos.");
+    const priorityPlaces = unique([String(p.mainCity).trim()].concat(list(p.priorityZones))).filter(meaningful);
+    const features = Object.keys(p).filter(k => k.startsWith("feature_") && meaningful(p[k])).map(k => ({ name: k.slice(8), priority: p[k] }));
+    const types = list(p.propertyTypes).filter(meaningful);
+    // Recuperar anuncios por zona y límite económico. Las características se
+    // evalúan después para no excluirlos de la consulta por una preferencia.
+    const query = [
+      (types.join(" o ") || "Vivienda") + " en venta en " + places.map(place => placeNames(place, p.market).slice(-1)[0]).join(" o ") + " (" + p.market + ")",
+      (minPrice !== null ? "entre " + minPrice + " y " + maxPrice : "hasta " + maxPrice) + " euros",
+      "Precio y características del inmueble"
+    ].filter(Boolean).join(". ");
+    return { p, maxPrice, minPrice, places, priorityPlaces, features, types, query: query.slice(0, 700), factors: [1,2,3,4,5].map(i => p["matchingFactor" + i]).filter(Boolean) };
+  }
+
+  function retrieve(c) {
+    const key = (PropertiesService.getScriptProperties().getProperty("TAVILY_API_KEY") || "").trim();
+    if (!key) throw new Error("Falta TAVILY_API_KEY en las propiedades del proyecto.");
+    const requests = portals.map(portal => ({
+      url: "https://api.tavily.com/search", method: "post", contentType: "application/json",
+      headers: { Authorization: "Bearer " + key }, muteHttpExceptions: true, followRedirects: false,
+      payload: JSON.stringify({ query: c.query, topic: "general", search_depth: "advanced", auto_parameters: false,
+        max_results: 20, include_domains: [portal.name], include_domains_mode: "restrict",
+        include_answer: false, include_raw_content: "markdown", include_images: false, include_usage: true })
+    }));
+    let responses;
+    try { responses = UrlFetchApp.fetchAll(requests); }
+    catch (_) { throw new Error("Fallo de conexión con Tavily. No se reintenta automáticamente."); }
+    const results = [], errors = [], coverage = [];
+    responses.forEach((response, i) => {
+      const portal = portals[i];
+      let data;
+      try { data = JSON.parse(response.getContentText()); } catch (_) { data = null; }
+      if (response.getResponseCode() !== 200 || !data || !Array.isArray(data.results)) {
+        errors.push(portal.name + ": HTTP " + response.getResponseCode());
+      } else {
+        coverage.push(portal.name + ": " + data.results.length + " resultados, créditos " + (data.usage ? data.usage.credits : "no informados"));
+        data.results.forEach(item => { if (item && item.url) results.push({ item, portal }); });
+      }
+    });
+    if (errors.length === portals.length) throw new Error(errors.join("; "));
+    return expandListings({ results, errors, coverage }, c);
+  }
+
+  function plainMarkdown(value) {
+    return String(value || "")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\*\*|__/g, "");
+  }
+
+  function canonicalUrl(value) {
+    return String(value || "").trim().split(/[?#]/)[0]
+      .replace(/^(https:\/\/(?:www\.)?idealista\.com\/inmueble\/\d+)\/?$/i, "$1/");
+  }
+
+  function listingUrls(value, portal) {
+    const raw = String(value || "");
+    const absolute = raw.match(/https:\/\/[^\s<>"')\]]+/g) || [];
+    const hrefs = [...raw.matchAll(/href\s*=\s*["']([^"'<>]+)["']/gi)].map(match => match[1]);
+    const relative = [...raw.matchAll(/\]\((\/[^)\s]+)\)/g)].map(match => match[1]);
+    return unique(absolute.concat(hrefs, relative).map(value => {
+      const link = value.replace(/&amp;/g, "&");
+      return canonicalUrl(/^\/(?!\/)/.test(link) ? "https://www." + portal.name + link : link);
+    })).filter(url => portal.re.test(url));
+  }
+
+  function isLocalSaleList(result, c) {
+    const url = String(result.item.url || "");
+    const host = new RegExp("^https://(?:www\\.)?" + escape(result.portal.name) + "/", "i");
+    if (!host.test(url) || result.portal.re.test(canonicalUrl(url)) || rejectPage(result.item) === "bloqueo") return false;
+    const route = fold(url.replace(host, "/"));
+    if (!/^\/(?:venta-viviendas\/|venta\/(?:pisos?|casas|aticos|duplexs)-|es\/comprar\/(?:viviendas|pisos|casas)\/|venta-de-(?:pisos|casas|chalets|apartamentos)-en-)/.test(route)) return false;
+    return !c || c.places.some(place => placeNames(place, c.p.market).some(name => {
+      const slug = fold(name).split(" ").map(escape).join("[-_]");
+      const province = escape(fold(c.p.market).replace(/ /g, "-"));
+      return new RegExp("(?:/|-)" + slug + "(?:-" + province + ")?(?:[/_]|$|\\?)").test(route);
+    }));
+  }
+
+  function expandListings(data, c) {
+    // Un listado sirve para descubrir URLs, nunca para atribuir el precio o
+    // las características de una tarjeta a otra vivienda.
+    // Las URLs de listados de Idealista terminan en barra antes de los
+    // parámetros. Una URL truncada por el buscador puede devolver un 404.
+    data.results = data.results.map(result => ({ ...result, item: { ...result.item,
+      url: String(result.item.url).replace(/^(https:\/\/(?:www\.)?idealista\.com\/venta-viviendas\/[^?#]*[^/])(?=[?#]|$)/i, "$1/") } }));
+    // A partir de localidades ya descubiertas, centrar la muestra en el
+    // presupuesto evita consumir las sesenta fichas con precios extremos.
+    // Estas páginas comparten el límite de ocho, no añaden consultas Tavily.
+    const budgetLists = [], budgetRoots = new Set();
+    if (c) for (const result of data.results) {
+      if (result.portal.name !== "idealista.com" || !isLocalSaleList(result, c)) continue;
+      const root = /^(https:\/\/(?:www\.)?idealista\.com\/venta-viviendas\/[^/?#]+\/)/i.exec(result.item.url);
+      if (!root || budgetRoots.has(root[1])) continue;
+      budgetRoots.add(root[1]);
+      const filters = "con-precio-hasta_" + c.maxPrice + (c.minPrice !== null ? ",precio-desde_" + c.minPrice : "");
+      budgetLists.push({ portal: result.portal, item: { url: root[1] + filters + "/", title: "Listado de venta dentro del presupuesto", content: "", raw_content: "" } });
+    }
+    data.results = budgetLists.concat(data.results);
+    const known = new Set(data.results.filter(r => r.portal.re.test(canonicalUrl(r.item.url)))
+      .map(r => canonicalUrl(r.item.url)));
+    const queues = [];
+    const unread = [];
+    for (const result of data.results) {
+      if (!isLocalSaleList(result, c)) continue;
+      const raw = String(result.item.raw_content || "") + "\n" + String(result.item.content || "");
+      const urls = listingUrls(raw, result.portal);
+      if (urls.length) queues.push(urls.map(url => ({ url, portal: result.portal })));
+      else unread.push(result);
+    }
+    // Tavily puede devolver un listado sin sus enlaces. Leer hasta ocho
+    // páginas originales recupera las URLs relativas del HTML del portal.
+    const byPortal = portals.map(portal => unread.filter(result => result.portal.name === portal.name));
+    if (c) byPortal.forEach(group => group.sort((a, b) =>
+      Number(contains(fold(b.item.url).replace(/[-_/]/g, " "), c.p.mainCity)) -
+      Number(contains(fold(a.item.url).replace(/[-_/]/g, " "), c.p.mainCity))));
+    const pages = [], pageUrls = new Set();
+    while (byPortal.some(group => group.length) && pages.length < 8) {
+      for (const group of byPortal) {
+        const result = group.shift();
+        if (!result || pageUrls.has(result.item.url)) continue;
+        pageUrls.add(result.item.url); pages.push(result);
+        if (pages.length === 8) break;
+      }
+    }
+    if (pages.length) {
+      try {
+        const replies = UrlFetchApp.fetchAll(pages.map(result => ({ url: result.item.url,
+          method: "get", muteHttpExceptions: true, followRedirects: false })));
+        replies.forEach((response, i) => {
+          const result = pages[i], code = response.getResponseCode();
+          const urls = code === 200 ? listingUrls(response.getContentText(), result.portal) : [];
+          if (urls.length) queues.push(urls.map(url => ({ url, portal: result.portal })));
+          console.info("[Buyer Search] Listado leído " + JSON.stringify({ url: result.item.url, httpStatus: code, enlaces: urls.length }));
+          if (code !== 200 && code !== 404 && code !== 410) data.errors.push(result.portal.name + ": listado no comprobado (HTTP " + code + ")");
+        });
+        data.coverage.push("Listados HTML: " + pages.length + " páginas leídas sin consultas Tavily adicionales");
+      } catch (_) {
+        data.errors.push("No se pudieron leer los listados originales; no se reintenta.");
+      }
+    }
+    // Repartir el límite entre los listados evita que la primera página
+    // agote toda la muestra. No se añaden consultas ni créditos de Tavily.
+    const linked = [];
+    while (queues.some(queue => queue.length) && linked.length < 60) {
+      for (const queue of queues) {
+        const next = queue.shift();
+        if (!next || known.has(next.url)) continue;
+        known.add(next.url); linked.push(next);
+        if (linked.length === 60) break;
+      }
+    }
+    data.results = data.results.map(result => ({ ...result, item: { ...result.item,
+      raw_content: plainMarkdown(result.item.raw_content), content: plainMarkdown(result.item.content) } }));
+    data.detailResponses = new Map();
+    if (!linked.length) return data;
+    let responses;
+    try {
+      responses = UrlFetchApp.fetchAll(linked.map(link => ({ url: link.url,
+        method: "get", muteHttpExceptions: true, followRedirects: false })));
+    } catch (_) {
+      data.errors.push("No se pudieron leer las fichas enlazadas desde los listados; no se reintenta.");
+      return data;
+    }
+    let recovered = 0;
+    responses.forEach((response, i) => {
+      const link = linked[i], code = response.getResponseCode();
+      const html = String(response.getContentText() || "");
+      // El h1 puede contener solo la calle; el título propio de la ficha
+      // conserva el municipio y evita atribuirle la localidad del listado.
+      const heading = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(html) || /<h1\b[^>]*>([\s\S]*?)<\/h1\s*>/i.exec(html);
+      const title = heading ? htmlListingText(heading[1]).replace(/\s+/g, " ").trim() : "";
+      const raw = code === 200 ? htmlListingText(html) : "";
+      const h1 = /<h1\b[^>]*>[\s\S]*?<\/h1\s*>/i.exec(html);
+      // Pisos.com identifica a veces solo el barrio en título y URL, pero
+      // publica el municipio en el párrafo inmediatamente bajo su h1.
+      const header = h1 ? html.slice(h1.index + h1[0].length, h1.index + h1[0].length + 2000) : "";
+      const firstParagraph = /<p\b[^>]*>([\s\S]*?)<\/p\s*>/i.exec(header);
+      const headerLocation = link.portal.name === "pisos.com" && firstParagraph ? htmlListingText(firstParagraph[1]).trim() : "";
+      const item = { url: link.url, title, headerLocation, raw_content: raw, content: "" };
+      if (code !== 200 || !title || rejectPage(item) === "bloqueo") {
+        console.info("[Buyer Search] Ficha enlazada no utilizable " + JSON.stringify({ url: link.url, httpStatus: code }));
+        if (code !== 404 && code !== 410) data.errors.push(link.portal.name + ": ficha enlazada no comprobada (HTTP " + code + ")");
+        return;
+      }
+      data.detailResponses.set(link.url, response);
+      data.results.push({ item, portal: link.portal });
+      recovered++;
+    });
+    data.errors = unique(data.errors);
+    data.coverage.push("Listados: " + linked.length + " fichas enlazadas examinadas, " + recovered + " recuperadas; límite 60, sin consultas Tavily adicionales");
+    return data;
+  }
+
+  function rejectPage(item) {
+    const title = String(item.title || "").trim(), raw = String(item.raw_content || ""), content = String(item.content || "");
+    if (/pardon our interruption|para continuar,?\s+completa el captcha|tu visita a milanuncios se ha interrumpido|access denied|verify (?:that )?you are human/i.test(title + "\n" + content + "\n" + raw.slice(0, 5000))) return "bloqueo";
+    if (/^(?:\d+\s+)?(?:pisos(?: y apartamentos)?|apartamentos|casas(?: y pisos)?|viviendas)\s+(?:(?:baratos|en venta)\s+)?en\b/i.test(title) || /\b\d[\d.,]*\s+resultados?\s*\n\s*Guardar b[uú]squeda/i.test(raw.slice(0, 8000))) return "listado general";
+    if (/anuncio (?:ya )?no (?:esta )?disponible|anuncio (?:retirado|eliminado)|inmueble (?:vendido|no disponible)/i.test(fold(title + " " + content + " " + raw.slice(0, 3000)))) return "anuncio retirado";
+    if (/\ben alquiler\b|^(local|nave|garaje|plaza de garaje|terreno|solar|trastero)\b.*\ben venta\b/i.test(title)) return "otro tipo de oferta";
+    return "";
+  }
+
+  function listingText(item) {
+    let raw = String(item.raw_content || "");
+    const start = /^(?:#{1,3}\s*)?(?:piso|apartamento|[aá]tico|d[uú]plex|casa|chalet|estudio)\b[^\n]*\ben venta\b[^\n]*/im.exec(raw);
+    if (start) raw = raw.slice(Math.max(0, start.index - 180));
+    else {
+      const details = /^(?:#{1,3}\s*)?(?:Comentario del anunciante|Descripci[oó]n|Datos b[aá]sicos)\s*$/im.exec(raw);
+      raw = details ? raw.slice(details.index) : "";
+    }
+    // No mezclar datos de calculadoras, anuncios relacionados ni el menú de zonas.
+    const cut = /(?:calcula tu hipoteca|fotocasa hipotecas|cuota mensual estimada|anuncios similares|inmuebles similares|viviendas cerca de|otras viviendas que|tambi[eé]n te puede interesar)/i.exec(raw);
+    if (cut) raw = raw.slice(0, cut.index);
+    const snippet = String(item.content || "");
+    return { text: raw.slice(0, 18000) || snippet, full: Boolean(raw), snippet };
+  }
+
+  function oneNumber(text, expressions) {
+    for (const expression of expressions) {
+      const values = unique([...text.matchAll(expression)].map(m => number(m[1])).filter(n => n !== null));
+      if (values.length) return values.length === 1 ? values[0] : null;
+    }
+    return null;
+  }
+
+  function facts(item, body) {
+    const text = fold(body.text), title = fold(item.title);
+    const counts = text.replace(/\b(un|una|uno|dos|tres|cuatro|cinco|seis)\s+(habitacion(?:es)?|dormitorios?|banos?)\b/g,
+      (_, word, unit) => ({ un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6 }[word]) + " " + unit);
+    const amount = "(\\d[\\d., ]*)";
+    let price = oneNumber(title, [new RegExp("\\bpor " + amount + "\\s*€", "g")]);
+    if (price === null) price = oneNumber(text, [new RegExp("precio(?: del inmueble)?\\s*[:：]\\s*" + amount + "\\s*€", "g"), new RegExp("precio(?: atractivo)? (?:de|es de)\\s*€\\s*" + amount, "g"), new RegExp("precio(?: atractivo)? (?:de|es de)\\s*" + amount + "\\s*(?:€|euros)", "g")]);
+    if (price === null && !/hipoteca|cuota|intereses|impuestos|notaria|honorarios|precio por m|€\s*\/\s*m|desde\s*[\d€]/.test(text)) {
+      price = oneNumber(text, [/(\d[\d.,]*)\s*€/g, /€\s*(\d[\d.,]*)/g]);
+    }
+    const bedrooms = oneNumber(counts, [/habitaciones\s*:\s*(\d+)/g, /(\d+)\s*(?:hab\.?|habs\.?|habitaciones|dormitorios)\b/g]);
+    const bathrooms = oneNumber(counts, [/banos\s*:\s*(\d+)/g, /(\d+)\s*banos?\b/g]);
+    const area = oneNumber(text, [/superficie construida\s*:\s*(\d[\d.,]*)\s*m/g, /(\d[\d.,]*)\s*m[2²]\s*construidos/g, /(\d[\d.,]*)\s*m[2²](?!\s*(?:util|de terraza|de balcon|de garaje))/g]);
+    return { price, bedrooms, bathrooms, area, text };
+  }
+
+  // Precio y ocupación se comprueban también fuera del fragmento recortado
+  // para las preferencias. Una calculadora no debe ocultar el resto de la ficha.
+  function criticalDetails(item, body) {
+    let raw = String(item.raw_content || "");
+    const start = /^(?:#{1,3}\s*)?(?:piso|apartamento|[aá]tico|d[uú]plex|casa|chalet|estudio)\b[^\n]*\ben venta\b[^\n]*/im.exec(raw);
+    const details = /^(?:#{1,3}\s*)?(?:Comentario del anunciante|Descripci[oó]n|Datos b[aá]sicos)\s*$/im.exec(raw);
+    raw = start ? raw.slice(start.index) : details ? raw.slice(details.index) : "";
+    const cut = /(?:anuncios similares|inmuebles similares|viviendas cerca de|otras viviendas que|tambi[eé]n te puede interesar|servicios de idealista|\n(?:#{1,3}\s*)?Servicios\s*\n)/i.exec(raw);
+    if (cut) raw = raw.slice(0, cut.index);
+    const sources = [body.text, raw, String(item.content || "")].filter(Boolean);
+    const prices = unique(sources.map(text => {
+      const explicit = facts(item, { text }).price;
+      if (explicit !== null) return explicit;
+      // Un precio aislado en la cabecera precede a las calculadoras. No usar
+      // sus cuotas ni los precios de anuncios relacionados como precio de venta.
+      const finance = /(?:calcula tu hipoteca|fotocasa hipotecas|cuota mensual estimada)/i.exec(text);
+      const header = finance ? text.slice(0, finance.index) : text;
+      return oneNumber(header, [/^\s*(\d[\d.,]*)\s*(?:€|euros)\s*$/gm]);
+    }).filter(value => value !== null && value > 0));
+    const evidence = fold([String(item.title || "")].concat(sources).join("\n"));
+    return {
+      price: prices.length === 1 ? prices[0] : null,
+      occupied: /\b(?:ocupad[oa]|okupad[oa])(?:\s+ilegalmente)?\b|\bocupacion ilegal\b/.test(evidence)
+    };
+  }
+
+  function htmlListingText(html) {
+    // Leer el contenido de la página, sin código, menús ni pie de página.
+    return String(html || "")
+      .replace(/<!--[^]*?-->/g, "")
+      .replace(/<(head|script|style|nav|footer)\b[^>]*>[^]*?<\/\1\s*>/gi, "")
+      .replace(/<(?:br|hr)\b[^>]*>|<\/(?:p|div|li|section|article|h[1-6]|span)\s*>/gi, "\n")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (match, hex, dec) => {
+        const code = parseInt(hex || dec, hex ? 16 : 10);
+        return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : " ";
+      })
+      .replace(/&(nbsp|euro|amp|quot|apos|aacute|eacute|iacute|oacute|uacute|agrave|egrave|igrave|ograve|ugrave|uuml|ccedil|ntilde);/gi,
+        (_, name) => ({nbsp: " ", euro: "€", amp: "&", quot: '"', apos: "'", aacute: "á", eacute: "é", iacute: "í", oacute: "ó", uacute: "ú", agrave: "à", egrave: "è", igrave: "ì", ograve: "ò", ugrave: "ù", uuml: "ü", ccedil: "ç", ntilde: "ñ"}[name.toLowerCase()]))
+      .replace(/[\t ]+/g, " ").replace(/\n[\t ]+/g, "\n").trim().slice(0, 60000);
+  }
+
+  const featureWords = {
+    "Ascensor": "ascensor", "Terraza": "terraza", "Balcón": "balcon", "Garaje": "garaje|parking|plaza de aparcamiento",
+    "Trastero": "trastero", "Exterior": "exterior", "Buena luz natural": "luminosa?|luminoso|luz natural",
+    "Aire acondicionado": "aire acondicionado|a/a", "Calefacción": "calefaccion", "Piscina": "piscina",
+    "Zonas comunes": "zonas comunes|zonas comunitarias", "Accesibilidad": "accesible|accesibilidad|adaptad[oa] para movilidad reducida",
+    "Transporte público cercano": "(?:cerca|proxim[oa]|junto|pocos minutos)[^.\\n]{0,65}(?:metro|autobus|tren|transporte publico)|(?:metro|autobus|tren|transporte publico)[^.\\n]{0,45}(?:cerca|proxim[oa]|a pocos minutos)"
+  };
+
+  function featureState(text, name) {
+    const words = featureWords[name];
+    if (!words) return null;
+    if (name === "Buena luz natural" && /(?:vivienda|piso) oscur[oa]|poca luz natural|poco luminos[oa]/.test(text)) return false;
+    const no = new RegExp("(?:sin|no (?:tiene|dispone de|cuenta con|hay))\\s+(?:(?:un[oa]?|ningun[oa]?|el|la)\\s+)?(?:" + words + ")|(?:" + words + ")\\s*:\\s*no\\b", "i");
+    if (no.test(text)) return false;
+    // Una mención opcional o a instalar no demuestra que el inmueble lo incluya.
+    if (new RegExp("(?:posibilidad|preinstalacion|instalar)[^.]{0,45}(?:" + words + ")", "i").test(text)) return null;
+    return new RegExp("(?:^|[^a-z])(?:" + words + ")(?:$|[^a-z])", "i").test(text) ? true : null;
+  }
+
+  function evaluate(c, item, portal) {
+    const url = String(item.url).trim().split(/[?#]/)[0];
+    const id = portal.re.exec(url);
+    if (!id) return { reject: "URL no reconocida" };
+    const pageError = rejectPage(item);
+    if (pageError) return { reject: pageError };
+    const body = listingText(item), f = facts(item, body);
+    const critical = criticalDetails(item, body);
+    f.price = critical.price;
+    const title = fold(item.title), text = f.text;
+    const urlText = fold(decodeURI(url));
+    const place = c.places.find(p => placeNames(p, c.p.market).some(name => {
+      const slug = fold(name).split(" ").map(escape).join("[-_]");
+      const inTitle = new RegExp("(?:\\ben |,\\s*|\\(\\s*)" + escape(fold(name)) + "(?:\\s*[,—|)]|\\s*$)").test(title);
+      const inHeader = new RegExp("\\(\\s*" + escape(fold(name)) + "\\s*\\)").test(fold(item.headerLocation));
+      if (portal.name === "fotocasa.es") return new RegExp("/vivienda/" + escape(fold(name).replace(/ /g, "-")) + "/").test(urlText);
+      if (portal.name === "pisos.com") return new RegExp("/comprar/(?:piso|apartamento|atico|duplex|casa|chalet|adosado|estudio)-" + slug + "(?:_|-|/)").test(urlText) || inTitle || inHeader;
+      if (portal.name === "milanuncios.com") return new RegExp("/venta-de-[^/]+-en-" + escape(fold(name).replace(/ /g, "-")) + "-").test(urlText);
+      // En Idealista la URL solo contiene el ID. Exige una localidad delimitada
+      // en el título, evitando confundir una calle con el municipio.
+      return inTitle;
+    }));
+    if (!place) return { reject: "zona no acreditada en título o URL" };
+    // Si la descripción declara otra localidad, una palabra en la URL no basta.
+    const declarations = [...text.matchAll(/(?:municipio|localidad|poblacion|ciudad) de ([a-z ]{2,50})(?=[,.()])/g)].map(m => m[1].trim())
+      .filter(loc => !/^(?:la comarca|la provincia|la comunidad|la region)\b/.test(loc));
+    if (declarations.some(loc => !c.places.some(p => placeNames(p, c.p.market).some(name => fold(loc) === fold(name))))) return { reject: "ubicación contradictoria" };
+    if (list(c.p.excludedZones).filter(meaningful).some(zone => placeNames(zone, c.p.market).some(name => placeNames(place, c.p.market).some(accepted => fold(name) === fold(accepted))))) return { reject: "zona descartada" };
+    if (f.price > c.maxPrice) return { reject: "supera el presupuesto" };
+    if (c.minPrice !== null && f.price > 0 && f.price < c.minPrice) {
+      return { reject: "por debajo del rango mínimo" };
+    }
+    // Una vivienda ocupada ilegalmente no es una opción financiable para este
+    // flujo, aunque cumpla la zona y el precio.
+    if (critical.occupied) {
+      return { reject: "vivienda ocupada ilegalmente" };
+    }
+    const pending = ["Disponibilidad actual y datos del anuncio con el anunciante"], reasons = ["Precio dentro del máximo", "Zona indicada: " + place];
+    if (f.price === null || f.price <= 0) {
+      pending.push("Precio no visible en el resultado; comprobarlo en el enlace antes de contactar");
+      reasons[0] = "Precio pendiente de comprobar";
+    }
+    if (!body.full) pending.push("Solo hay fragmentos del buscador; revisar la ficha completa");
+    const minimumIssues = [];
+    for (const [field, value, label] of [["minBedrooms", f.bedrooms, "habitaciones"], ["minBathrooms", f.bathrooms, "baños"], ["minArea", f.area, "m² construidos"]]) {
+      const minimum = number(c.p[field]);
+      if (!minimum) continue;
+      if (value !== null && value < minimum) {
+        minimumIssues.push(label + ": " + value + " frente a mínimo " + minimum);
+        pending.push("No cumple el mínimo de " + label + "; revisar por prioridad de zona");
+        continue;
+      }
+      if (value === null) {
+        // Zona y presupuesto siguen siendo filtros principales. Si el portal
+        // no publica este dato, dejamos el enlace para revisión manual.
+        pending.push("No se pudo comprobar el mínimo de " + label);
+        continue;
+      }
+      reasons.push(value + " " + label + " según anuncio");
+    }
+    const states = {}, undesiredFeatures = [];
+    for (const feature of c.features) {
+      const value = featureState(text, feature.name); states[feature.name] = value;
+      if (feature.priority === "Obligatorio" && value === false) return { reject: "falta obligatorio: " + feature.name };
+      if (feature.priority === "No lo quiere" && value === true) {
+        undesiredFeatures.push(feature.name);
+        pending.push("Característica no deseada detectada: " + feature.name + "; revisar por prioridad de zona");
+      }
+      if (["Obligatorio", "No lo quiere"].includes(feature.priority) && value === null) pending.push(feature.priority + ": " + feature.name + " sin confirmar");
+      if (feature.priority === "Obligatorio" && value === true) reasons.push(feature.name + " mencionado en el anuncio");
+    }
+    const discardPatterns = {
+      "Vivienda ocupada": /(?:vivienda|inmueble) ocupad[oa]|ocupacion ilegal/,
+      "Vivienda alquilada": /(?:vivienda|inmueble) alquilad[oa]|con inquilinos/,
+      "Nuda propiedad": /nuda propiedad/, "No visitable": /no (?:se puede|es posible) visitar|no visitable|sin posibilidad de visita/,
+      "Subasta": /subasta/, "Cesión de remate": /cesion de remate/,
+      "Reforma integral": /(?:necesita|precisa|requiere|para|pendiente de) (?:una )?reforma integral/,
+      "Interior": /(?:piso|vivienda|inmueble) interior|planta interior/, "Bajo": /(?:planta baja|bajo exterior|bajo interior)/
+    };
+    for (const discard of list(c.p.disqualifiers)) {
+      if (discardPatterns[discard] && discardPatterns[discard].test(text)) return { reject: discard };
+      if (discard === "Sin ascensor" && featureState(text, "Ascensor") === false) return { reject: discard };
+      if (discard === "Sin garaje" && featureState(text, "Garaje") === false) return { reject: discard };
+      pending.push("Comprobar descarte: " + discard);
+    }
+    if (c.p.noElevator === "No" && featureState(text, "Ascensor") === false) return { reject: "no acepta vivienda sin ascensor" };
+    if (list(c.p.acceptedStates).length && !list(c.p.acceptedStates).some(s => /reforma|actualizacion/i.test(s)) && /(?:necesita|precisa|requiere) (?:una )?reforma|estado\s*:?\s*a reformar/.test(text)) return { reject: "estado incompatible con los seleccionados" };
+    const actualType = /^(piso|apartamento|atico|bajo|duplex|casa|chalet|adosado|estudio)\b/.exec(title);
+    if (c.types.length && actualType && !c.types.some(t => fold(t) === actualType[1] || (fold(t) === "piso" && actualType[1] === "apartamento")) && !c.types.includes("Obra nueva")) return { reject: "tipo de vivienda no seleccionado" };
+    if (c.types.length && !actualType) pending.push("Confirmar tipo de vivienda: " + c.types.join(", "));
+    // Se conservan todos estos criterios: no se simulan distancias, plazos,
+    // costes de reforma ni comprensión semántica de comentarios libres.
+    const manual = { acceptedFloors: "Plantas aceptadas", noElevator: "Condición de ascensor", buildingAge: "Antigüedad", acceptedStates: "Estados aceptados", renovationLevel: "Reforma asumible", renovationBudget: "Presupuesto de reforma", nearbyPoint: "Cercanía requerida", commute: "Desplazamiento máximo", transport: "Transportes", radius: "Radio", nearbyMunicipalities: "Municipios cercanos", targetDate: "Plazo de compra", otherDisqualifiers: "Otros descartes", idealHome: "Vivienda ideal", instantReject: "Descarte libre", additionalNotes: "Notas", excludedZones: "Zonas excluidas" };
+    Object.keys(manual).forEach(k => { if (meaningful(c.p[k])) pending.push(manual[k] + ": " + String(c.p[k]).slice(0, 350)); });
+    pending.push("Confirmar financiación y gastos de compra; rango de búsqueda: " + (c.minPrice !== null ? c.minPrice + "–" : "hasta ") + c.maxPrice + " € (hipoteca más fondos propios)");
+    // Precio y zonas aceptadas ya son filtros fijos. Dentro de las zonas
+    // preferidas se llenan primero las plazas sin flexibilizar preferencias,
+    // después las deseables y finalmente las importantes, sin otra consulta.
+    const zoneTier = fold(place) === fold(c.p.mainCity) || list(c.p.priorityZones).some(p => fold(p) === fold(place)) ? 0 : 1;
+    const relaxed = c.features.filter(feature => ["Importante", "Deseable"].includes(feature.priority) && states[feature.name] !== true);
+    const preferenceTier = relaxed.some(feature => feature.priority === "Importante") ? 2 : relaxed.length ? 1 : 0;
+    const relaxations = relaxed.map(feature => feature.priority + ": " + feature.name + (states[feature.name] === false ? " no disponible según anuncio" : " sin confirmar"));
+    pending.push(...relaxations);
+    let score = 0;
+    const weight = factor => { const i = c.factors.indexOf(factor); return i < 0 ? 1 : 6 - i; };
+    score += f.price !== null && f.price > 0
+      ? (1 - f.price / (number(c.p.targetPrice) || c.maxPrice)) * 10 * weight("Precio")
+      : -5 * weight("Precio");
+    if (fold(place) === fold(c.p.mainCity) || list(c.p.priorityZones).some(p => fold(p) === fold(place))) score += 5 * weight("Zona");
+    if (f.area !== null && number(c.p.idealArea) && f.area >= number(c.p.idealArea)) score += 3 * weight("Tamaño");
+    if (f.bedrooms !== null && number(c.p.idealBedrooms) && f.bedrooms >= number(c.p.idealBedrooms)) score += 3 * weight("Habitaciones");
+    c.features.forEach(feature => {
+      if (states[feature.name] === true && feature.priority !== "No lo quiere") score += (feature.priority === "Importante" ? 3 : 1) * weight(feature.name === "Buena luz natural" ? "Luz natural" : feature.name);
+    });
+    score -= pending.filter(s => /sin confirmar|Confirmar mínimo|Solo hay/.test(s)).length * 3;
+    score -= undesiredFeatures.length * 8;
+    return { url, key: portal.name + ":" + id[1], title: String(item.title || "Vivienda").slice(0, 180), place, facts: f,
+      priceTier: f.price !== null && f.price > 0 ? 0 : 1,
+      minimumIssues, undesiredFeatures, score, zoneTier, preferenceTier, relaxations, reasons, pending: unique(pending), sources: [url], evidence: body.text.slice(0, 16000) };
+  }
+
+  function rank(c, data) {
+    const accepted = [], discarded = {}, seen = new Set();
+    for (const result of data.results) {
+      let candidate;
+      try { candidate = evaluate(c, result.item, result.portal); }
+      catch (_) { candidate = { reject: "contenido ilegible o ambiguo" }; }
+      if (candidate.reject) {
+        discarded[candidate.reject] = (discarded[candidate.reject] || 0) + 1;
+        console.info("[Buyer Search] Descarte " + JSON.stringify({
+          portal: result.portal.name, url: String(result.item.url),
+          titulo: String(result.item.title || "").slice(0, 300), motivo: candidate.reject
+        }));
+        continue;
+      }
+      // Segunda barrera antes de ordenar y escribir: ningún candidato puede
+      // pasar si el precio extraído no es numérico o supera la financiación.
+      if (!candidate.facts) continue;
+      if (candidate.facts.price > c.maxPrice) {
+        discarded["supera el presupuesto"] = (discarded["supera el presupuesto"] || 0) + 1;
+        console.info("[Buyer Search] Descarte " + JSON.stringify({
+          portal: result.portal.name, url: String(result.item.url),
+          titulo: String(result.item.title || "").slice(0, 300),
+          motivo: "supera el presupuesto", precioLeido: candidate.facts.price,
+          limite: c.maxPrice
+        }));
+        continue;
+      }
+      console.info("[Buyer Search] Candidato aceptado " + JSON.stringify({
+        portal: result.portal.name, url: candidate.url,
+        precioLeido: candidate.facts.price, limite: c.maxPrice,
+        zona: candidate.place,
+        precioPendiente: candidate.facts.price === null || candidate.facts.price <= 0
+      }));
+      if (seen.has(candidate.key)) continue;
+      seen.add(candidate.key); accepted.push(candidate);
+    }
+    const verified = verifyCandidates(accepted, c, discarded, data.detailResponses);
+    verified.sort((a,b) => a.zoneTier - b.zoneTier || a.priceTier - b.priceTier || a.minimumIssues.length - b.minimumIssues.length || a.undesiredFeatures.length - b.undesiredFeatures.length || a.preferenceTier - b.preferenceTier || b.score - a.score || (a.facts.price || Infinity) - (b.facts.price || Infinity));
+    const matches = [];
+    for (const candidate of verified) {
+      // Duplicados entre portales: mismo municipio, precio y superficie, más
+      // una secuencia descriptiva larga compartida. No basta un título genérico.
+      const duplicate = matches.find(m => fold(m.place) === fold(candidate.place) && m.facts.price === candidate.facts.price && m.facts.area !== null && m.facts.area === candidate.facts.area && sharedDescription(m.evidence, candidate.evidence));
+      if (duplicate) { duplicate.sources.push(candidate.url); continue; }
+      matches.push(candidate);
+    }
+    const top = matches.slice(0, 10);
+    const status = data.errors.length ? "partial" : top.length ? "needs_review" : "no_matches";
+    const summary = [
+      "Preselección por reglas; no confirma disponibilidad ni interpreta por completo los textos libres.",
+      "Rango de precio: " + (c.minPrice !== null ? c.minPrice + "–" : "hasta ") + c.maxPrice + " € (hipoteca + fondos propios). Prioridad: zonas preferidas, después zonas aceptables.",
+      "Candidatos propuestos: " + top.length + ". Revisar posibles duplicados cuando los anuncios no aporten datos suficientes.",
+      "Preferencias: primero todas las comprobadas; después flexibilizar Deseable y finalmente Importante, dentro de cada grupo de zonas. Zona y presupuesto son filtros fuertes; habitaciones, baños, superficie y características No lo quiere pueden quedar pendientes cuando la zona prioritaria coincide. Solo se guardan anuncios con precio leído dentro del rango.",
+      top.map((match, i) => "match" + (i + 1) + ": " + match.place + ", " + match.facts.price + " €; " +
+        (match.minimumIssues.length ? "Mínimos pendientes: " + match.minimumIssues.join("; ") + "; " : "") +
+        (match.relaxations.length ? match.relaxations.join("; ") : "Sin flexibilizar preferencias Importantes o Deseables") +
+        (match.pending.some(note => note.startsWith("Obligatorio:")) ? "; " + match.pending.filter(note => note.startsWith("Obligatorio:")).join("; ") : "")).join("\n"),
+      "Cobertura: " + data.coverage.join("; "),
+      "Descartes: " + JSON.stringify(discarded),
+      data.errors.length ? "Fuentes con error: " + data.errors.join("; ") : "",
+      !top.length ? "No se hallaron candidatos utilizables en esta muestra. No demuestra ausencia de viviendas en el mercado." : "Revisar las propiedades enlazadas antes de presentarlas al comprador; puede haber requisitos sin confirmar."
+    ].filter(Boolean).join("\n");
+    return { status, matches: top, summary };
+  }
+
+  function verifyCandidates(candidates, c, discarded, detailResponses = new Map()) {
+    if (!candidates.length) return candidates;
+    const unchecked = candidates.filter(candidate => !detailResponses.has(canonicalUrl(candidate.url)));
+    const requests = unchecked.map(candidate => ({
+      url: canonicalUrl(candidate.url),
+      method: "get",
+      muteHttpExceptions: true,
+      followRedirects: false
+    }));
+    let responses;
+    try {
+      responses = requests.length ? UrlFetchApp.fetchAll(requests) : [];
+    } catch (_) {
+      console.info("[Buyer Search] No se pudo verificar la vigencia de los enlaces; se revisa el precio disponible antes de guardar.");
+      responses = [];
+    }
+    unchecked.forEach((candidate, i) => { if (responses[i]) detailResponses.set(canonicalUrl(candidate.url), responses[i]); });
+    return candidates.filter(candidate => {
+      const response = detailResponses.get(canonicalUrl(candidate.url));
+      const code = response ? response.getResponseCode() : 0;
+      const html = response ? String(response.getContentText() || "") : "";
+      const body = html.slice(0, 12000);
+      const idealistaId = /https?:\/\/(?:www\.)?idealista\.com\/inmueble\/(\d+)/i.exec(candidate.url);
+      const idealistaFichaAusente = idealistaId && code === 200 && body &&
+        !new RegExp("(?:idealista\\.com/)?inmueble/" + idealistaId[1], "i").test(body);
+      const unavailable = code === 404 || code === 410 ||
+        /(?:anuncio|inmueble|vivienda) (?:ya )?(?:no está|no esta|no se encuentra|no disponible)|(?:anuncio|inmueble) (?:ya )?(?:ha sido )?(?:eliminado|retirado)|la página que buscas no existe|pagina no encontrada|404\s+(?:error|not found)/i.test(body) ||
+        Boolean(idealistaFichaAusente);
+      const general = /\b\d[\d.,]*\s+resultados?\s*\n?\s*Guardar b[uú]squeda/i.test(body);
+      if (unavailable || general) {
+        console.info("[Buyer Search] Enlace descartado en verificación " + JSON.stringify({
+          url: candidate.url, httpStatus: code,
+          motivo: idealistaFichaAusente ? "ficha Idealista no encontrada" : unavailable ? "anuncio no disponible" : "página general"
+        }));
+        return false;
+      }
+      if (code >= 400 && code !== 403 && code !== 429) {
+        console.info("[Buyer Search] Enlace no confirmado; se conserva " + JSON.stringify({ url: candidate.url, httpStatus: code }));
+      }
+      let price = candidate.facts.price;
+      let reason = "";
+      if (code === 200 && html && !rejectPage({ title: "", content: body })) {
+        const raw = htmlListingText(html);
+        const pageDetails = criticalDetails({ title: "", raw_content: raw, content: "" }, { text: listingText({ raw_content: raw }).text });
+        if (pageDetails.occupied) reason = "vivienda ocupada ilegalmente";
+        if (pageDetails.price !== null) price = pageDetails.price;
+      }
+      if (!reason && (price === null || !Number.isFinite(price) || price <= 0)) reason = "precio no comprobado";
+      if (!reason && price > c.maxPrice) reason = "supera el presupuesto";
+      if (!reason && c.minPrice !== null && price < c.minPrice) reason = "por debajo del rango mínimo";
+      console.info("[Buyer Search] Comprobación final " + JSON.stringify({
+        url: candidate.url, httpStatus: code, precioLeido: price,
+        minimo: c.minPrice, limite: c.maxPrice, motivo: reason || "dentro del rango"
+      }));
+      if (reason) {
+        discarded[reason] = (discarded[reason] || 0) + 1;
+        return false;
+      }
+      candidate.facts.price = price;
+      candidate.priceTier = 0;
+      candidate.pending = candidate.pending.filter(note => !note.startsWith("Precio no visible"));
+      candidate.reasons = candidate.reasons.map(note => note === "Precio pendiente de comprobar" ? "Precio dentro del rango: " + price + " €" : note);
+      return true;
+    });
+  }
+
+  function sharedDescription(a, b) {
+    const first = fold(a).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ");
+    const second = fold(b).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ");
+    return first.split(/\s+/).some((_, i, words) => i % 10 === 0 && words.slice(i,i+35).length === 35 && second.includes(words.slice(i,i+35).join(" ")));
+  }
+
+  return { run, runByCode, makeCriteria, retrieve, expandListings, evaluate, rank, number, facts, featureState, rejectPage, portals };
+})();
